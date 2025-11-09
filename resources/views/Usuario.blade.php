@@ -47,7 +47,11 @@
         <form id="formLogin" action="#" method="POST">
             <!-- Botões -->
             <div class="d-flex justify-content-between">
-                <a href="#" class="btn btn-danger">Deletar Usuário</a>
+                <form action="{{ route('user.destroy', Auth::user()->id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja deletar sua conta?')">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-danger">Deletar Usuário</button>
+                </form>
                 <button type="submit" class="btn btn-primary">Editar Usuário</button>
             </div>
         </form>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Exception;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -24,5 +25,16 @@ class UserController extends Controller
         }catch (Exception $e){
               return back()->withInput()->with('error', 'Usuario não Cadastrado');
     }
+} 
+public function destroy($id){
+// Garante que o usuário só pode deletar a própria conta
+    if (Auth::id() != $id) {
+    return redirect()->back()->with('error', 'Ação não permitida.');
+    }
+    $user = User::findOrFail($id);
+    $user->delete(); // 👈 Soft delete (não apaga do banco)
+
+    return redirect()->route('TelaInicio')->with('success', 'Usuário deletado com sucesso!');
 }
+
 }
