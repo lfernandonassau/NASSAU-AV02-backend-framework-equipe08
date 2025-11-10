@@ -32,9 +32,49 @@ public function destroy($id){
     return redirect()->back()->with('error', 'Ação não permitida.');
     }
     $user = User::findOrFail($id);
-    $user->delete(); // 👈 Soft delete (não apaga do banco)
+    $user->delete(); //Soft delete (não apaga do banco)
 
     return redirect()->route('welcome')->with('success', 'Usuário deletado com sucesso!');
+}
+
+public function update(Request $request, $id)
+{
+    $user = User::findOrFail($id);
+
+    // Validação
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|email|unique:users,email,' . $user->id, // garante e-mail único
+        'password' => 'nullable|string|min:6|confirmed', // senha opcional
+    ]);
+
+    //os dados que serão atualizados
+    $data = [
+        'name' => $request->name,
+        'email' => $request->email,
+    ];
+
+    // Atualiza a senha somente se o campo foi preenchido
+    if ($request->filled('password')) {
+        $data['password'] = bcrypt($request->password);
+    }
+
+    $user->update($data);
+
+    return redirect()->route('usuario')->with('success', 'Usuário atualizado com sucesso!');
+}
+
+public function edit($id)
+{
+    // Busca o usuário pelo ID
+    $user = User::findOrFail($id);
+
+    // Garante que o usuário só pode editar a própria conta
+    if (Auth::id() != $user->id) {
+        return redirect()->back()->with('error', 'Ação não permitida.');
+    }
+
+    return view('users.EditarUsuario', compact('user'));
 }
 
 }

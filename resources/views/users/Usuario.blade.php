@@ -52,8 +52,8 @@
             <button type="submit" class="btn btn-danger">Deletar Usuário</button>
         </form>
 
-        <!-- Botão de editar -->
-        <a href="{{ route('user.edit', Auth::user()->id) }}" class="btn btn-primary">Editar Usuário</a>
+        <!-- Botão para encaminha para edicao -->
+        <a href="{{ route('editarusuario', Auth::user()->id) }}" class="btn btn-primary">Editar Usuário</a>
 
     </div>
 </div>

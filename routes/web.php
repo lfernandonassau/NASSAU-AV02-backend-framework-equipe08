@@ -1,5 +1,4 @@
 <?php
-
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LoginControler;
 use Illuminate\Support\Facades\Route;
@@ -27,8 +26,14 @@ Route::get('/inicio', function () {
 
 // Redireciona para a view 
 Route::get('/usuario', function () {
-    return view('Usuario');
+    return view('users.Usuario');
 })->middleware('auth')->name('usuario');
+
+// Redireciona para a de edicao
+Route::get('/EditarUsuario/{id}', [UserController::class, 'edit'])
+    ->middleware('auth')
+    ->name('editarusuario');
+
 
 // Editar usuário
 Route::get('/user/{id}/edit', [UserController::class, 'edit'])
