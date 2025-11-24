@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import api from "../api/api"; 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 
@@ -11,34 +11,36 @@ export default function CadastrarUsuario() {
     const [success, setSuccess] = useState("");
     const [error, setError] = useState("");
 
-    // Logout
-    const handleLogout = async () => {
-        try {
-            await axios.post("/logout");
-        } finally {
-            window.location.href = "/";
-        }
+    // Logout com JWT 
+    const handleLogout = () => {
+        localStorage.removeItem("token");
+        window.location.href = "/";
     };
 
-    // Submit do cadastro
+    // Enviar cadastro
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSuccess("");
         setError("");
 
         try {
-            const response = await axios.post("/store.user", {
+            const res = await api.post("/register", {
                 name,
                 email,
                 password,
             });
 
-            setSuccess(response.data.message || "Usuário cadastrado!");
+            setSuccess(res.data.message || "Usuário cadastrado com sucesso!");
+
             setName("");
             setEmail("");
             setPassword("");
         } catch (err) {
-            setError("Erro ao cadastrar. Verifique os dados.");
+            if (err.response?.status === 422) {
+                setError("Dados inválidos. Verifique os campos.");
+            } else {
+                setError("Erro ao cadastrar o usuário.");
+            }
         }
     };
 
@@ -70,7 +72,7 @@ export default function CadastrarUsuario() {
                 </div>
             </nav>
 
-            {/* Modal de logout */}
+            {/* Modal Logout */}
             <div className="modal fade" id="confirmLogoutModal" tabIndex="-1">
                 <div className="modal-dialog modal-dialog-centered">
                     <div className="modal-content shadow-lg border-0">
@@ -78,9 +80,7 @@ export default function CadastrarUsuario() {
                             <h5 className="modal-title">Confirmar Saída</h5>
                             <button className="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <div className="modal-body">
-                            Tem certeza que deseja sair?
-                        </div>
+                        <div className="modal-body">Tem certeza que deseja sair?</div>
                         <div className="modal-footer">
                             <button className="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                             <button className="btn btn-warning text-dark" onClick={handleLogout}>Sair</button>

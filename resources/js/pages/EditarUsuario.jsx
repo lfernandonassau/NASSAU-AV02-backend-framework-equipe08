@@ -1,190 +1,189 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import api from "../api/api";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 
-export default function EditUser({ user }) {
+export default function EditarConta() {
+  const { id } = useParams();
   const navigate = useNavigate();
 
-  // States do formulário
-  const [name, setName] = useState(user.name || "");
-  const [email, setEmail] = useState(user.email || "");
-  const [password, setPassword] = useState("");
-  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [conta, setConta] = useState({
+    descricao: "",
+    preco: "",
+    data_vencimento: "",
+    data_pagamento: "",
+    status: "Aberta",
+  });
 
   const [errors, setErrors] = useState([]);
-  const [successMessage, setSuccessMessage] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Modal de logout
+  // Formata datas para Laravel
+  const formatDate = (date) => {
+    if (!date) return null;
+    return date.replace("T", " ") + ":00";
+  };
+
+  // Buscar conta pelo ID
   useEffect(() => {
-    const logoutModal = new bootstrap.Modal(document.getElementById("confirmLogoutModal"));
-    const confirmLogoutBtn = document.getElementById("confirmLogoutBtn");
-    let logoutForm = null;
-
-    document.querySelectorAll(".btn-confirm-logout").forEach((button) => {
-      button.addEventListener("click", function () {
-        logoutForm = this.closest("form");
-        logoutModal.show();
+    api.get(`/contas/${id}`)
+      .then((res) => {
+        const data = res.data;
+        setConta({
+          descricao: data.descricao || "",
+          preco: data.preco || "",
+          data_vencimento: data.data_vencimento
+            ? new Date(data.data_vencimento).toISOString().slice(0, 16)
+            : "",
+          data_pagamento: data.data_pagamento
+            ? new Date(data.data_pagamento).toISOString().slice(0, 16)
+            : "",
+          status: data.status || "Aberta",
+        });
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err.response?.data || err);
+        alert("Erro ao carregar a conta.");
+        navigate("/inicio");
       });
-    });
+  }, [id]);
 
-    confirmLogoutBtn.addEventListener("click", function () {
-      if (logoutForm) logoutForm.submit();
-      logoutModal.hide();
-    });
-  }, []);
+  // Atualizar campos
+  const handleChange = (e) => {
+    setConta({ ...conta, [e.target.name]: e.target.value });
+  };
 
-  // Enviar formulário
+  // Submeter alteração
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors([]);
-    setSuccessMessage("");
+
+    const payload = {
+      ...conta,
+      data_vencimento: formatDate(conta.data_vencimento),
+      data_pagamento: formatDate(conta.data_pagamento),
+    };
 
     try {
-      const res = await fetch(`/user/${user.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          password_confirmation: passwordConfirmation,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setSuccessMessage("Usuário atualizado com sucesso!");
-      } else if (res.status === 422) {
-        // Validação Laravel
-        setErrors(data.errors ? Object.values(data.errors).flat() : ["Erro de validação"]);
-      } else {
-        setErrors(["Erro inesperado ao atualizar usuário"]);
-      }
+      const res = await api.put(`/contas/${id}/update-json`, payload);
+      alert(res.data.message || "Conta atualizada com sucesso!");
+      navigate(`/conta/${id}`);
     } catch (err) {
-      console.error(err);
-      setErrors(["Erro ao conectar ao servidor"]);
+      console.error(err.response?.data || err);
+      if (err.response?.status === 422) {
+        setErrors(Object.values(err.response.data.errors).flat());
+      } else if (err.response?.data?.error) {
+        setErrors([err.response.data.error]);
+      } else {
+        setErrors(["Erro inesperado ao salvar a conta"]);
+      }
     }
   };
 
+  if (loading) return <div className="container mt-5">Carregando...</div>;
+
   return (
-    <div className="bg-light min-vh-100">
-      {/* Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div className="container-fluid">
-          <a className="navbar-brand text-light" href="/inicio">
-            Marca I
-          </a>
+    <div className="container mt-5">
+      <div className="card shadow-sm">
+        <div className="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+          <h4 className="mb-0">Editar Conta</h4>
           <button
-            className="navbar-toggler"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#navbarNav"
+            className="btn btn-outline-light btn-sm"
+            onClick={() => navigate("/inicio")}
           >
-            <span className="navbar-toggler-icon"></span>
+            Voltar
           </button>
-          <div className="collapse navbar-collapse" id="navbarNav">
-            <ul className="navbar-nav ms-auto">
-              <li className="nav-item ms-3">
-                <form action="/logout" method="POST">
-                  <input type="hidden" name="_token" value={document.querySelector('meta[name="csrf-token"]').getAttribute("content")} />
-                  <button type="button" className="btn btn-danger btn-sm btn-confirm-logout">Sair</button>
-                </form>
-              </li>
-            </ul>
-          </div>
         </div>
-      </nav>
 
-      {/* Modal logout */}
-      <div className="modal fade" id="confirmLogoutModal" tabIndex="-1">
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content shadow-lg border-0">
-            <div className="modal-header bg-warning text-dark">
-              <h5 className="modal-title">Confirmar Saída</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+        <div className="card-body">
+          {errors.length > 0 && (
+            <div className="alert alert-danger">
+              <strong>Erro!</strong>
+              <ul className="mb-0">
+                {errors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
             </div>
-            <div className="modal-body">Tem certeza que deseja sair da sua conta?</div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-              <button type="button" id="confirmLogoutBtn" className="btn btn-warning text-dark">Sair</button>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="mb-3">
+              <label htmlFor="descricao" className="form-label">Descrição</label>
+              <input
+                type="text"
+                id="descricao"
+                name="descricao"
+                className="form-control"
+                value={conta.descricao}
+                onChange={handleChange}
+                required
+              />
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Conteúdo */}
-      <div className="container mt-5">
-        <div className="card shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <h4 className="mb-0">Editar Usuário</h4>
-          </div>
+            <div className="mb-3">
+              <label htmlFor="preco" className="form-label">Preço (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                id="preco"
+                name="preco"
+                className="form-control"
+                value={conta.preco}
+                onChange={handleChange}
+                required
+              />
+            </div>
 
-          <div className="card-body">
-            {/* Mensagens */}
-            {successMessage && <div className="alert alert-success">{successMessage}</div>}
-            {errors.length > 0 && (
-              <div className="alert alert-danger">
-                <ul className="mb-0">
-                  {errors.map((err, i) => <li key={i}>{err}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {/* Formulário */}
-            <form onSubmit={handleSubmit}>
-              <div className="mb-3">
-                <label className="form-label">Nome:</label>
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label htmlFor="data_vencimento" className="form-label">Data de Vencimento</label>
                 <input
-                  type="text"
-                  className="form-control bg-light"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  type="datetime-local"
+                  id="data_vencimento"
+                  name="data_vencimento"
+                  className="form-control"
+                  value={conta.data_vencimento}
+                  onChange={handleChange}
                   required
                 />
               </div>
 
-              <div className="mb-3">
-                <label className="form-label">E-mail:</label>
+              <div className="col-md-6 mb-3">
+                <label htmlFor="data_pagamento" className="form-label">Data de Pagamento</label>
                 <input
-                  type="email"
-                  className="form-control bg-light"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label">Nova Senha (opcional):</label>
-                <input
-                  type="password"
+                  type="datetime-local"
+                  id="data_pagamento"
+                  name="data_pagamento"
                   className="form-control"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Deixe em branco se não quiser mudar"
+                  value={conta.data_pagamento}
+                  onChange={handleChange}
                 />
               </div>
+            </div>
 
-              <div className="mb-3">
-                <label className="form-label">Confirmar Nova Senha:</label>
-                <input
-                  type="password"
-                  className="form-control"
-                  value={passwordConfirmation}
-                  onChange={(e) => setPasswordConfirmation(e.target.value)}
-                />
-              </div>
+            <div className="mb-3">
+              <label htmlFor="status" className="form-label">Status</label>
+              <select
+                name="status"
+                id="status"
+                className="form-select"
+                value={conta.status}
+                onChange={handleChange}
+                required
+              >
+                <option value="Aberta">Aberta</option>
+                <option value="Quitada">Quitada</option>
+              </select>
+            </div>
 
-              <button type="submit" className="btn btn-success">Confirmar Mudanças</button>
-              <button type="button" className="btn btn-secondary ms-2" onClick={() => navigate("/usuario")}>Cancelar</button>
-            </form>
-          </div>
+            <div className="d-flex justify-content-between">
+              <button type="button" className="btn btn-secondary" onClick={() => navigate(`/conta/${id}`)}>Cancelar</button>
+              <button type="submit" className="btn btn-success">Salvar Alterações</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

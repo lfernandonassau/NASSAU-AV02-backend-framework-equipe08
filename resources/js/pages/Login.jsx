@@ -12,30 +12,31 @@ export default function Login() {
     e.preventDefault();
 
     try {
-      const res = await fetch("/login", {
+      const res = await fetch("http://127.0.0.1:8000/api/login", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-TOKEN": document
-            .querySelector('meta[name="csrf-token"]')
-            .getAttribute("content"),
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ email, password }),
-        credentials: "same-origin", // envia cookies de sessão
       });
 
-      if (res.ok) {
-        // Login OK, redireciona para a tela inicial
+      const data = await res.json();
+
+      if (res.ok && data.token) {
+        //  salva token JWT
+        localStorage.setItem("token", data.token);
+
+        //  redireciona
         navigate("/inicio");
-      } else if (res.status === 401) {
+      } 
+      else if (res.status === 401) {
         alert("E-mail ou senha incorretos!");
-      } else if (res.status === 419) {
-        alert("Erro de sessão/CSRF. Atualize a página e tente novamente.");
-      } else {
+      } 
+      else {
         alert("Erro inesperado ao fazer login!");
       }
     } catch (err) {
-      console.error("Erro fetch:", err);
+      console.error("Erro:", err);
       alert("Erro ao conectar ao servidor!");
     }
   };

@@ -16,5 +16,7 @@ class Conta extends Model
         'data_vencimento',
         'data_pagamento',
         'status',
+        'user_id', 
     ];
+    protected $dates = ['deleted_at']; // Marca deleted_at como data
 }

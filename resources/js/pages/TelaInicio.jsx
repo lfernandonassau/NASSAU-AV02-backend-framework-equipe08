@@ -13,16 +13,28 @@ export default function TelaInicio() {
   const [total, setTotal] = useState(0);
   const [contaExcluir, setContaExcluir] = useState(null);
 
-  // Checa se usuário está logado
+  // Filtros
+  const [filtroDescricao, setFiltroDescricao] = useState("");
+  const [filtroVencimentoInicial, setFiltroVencimentoInicial] = useState("");
+  const [filtroVencimentoFinal, setFiltroVencimentoFinal] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("");
+
+  const token = localStorage.getItem("token");
+
   useEffect(() => {
     const verificarLogin = async () => {
       try {
-        const res = await fetch("/user-logado", {
-          credentials: "same-origin",
+        if (!token) {
+          navigate("/");
+          return;
+        }
+
+        const res = await axios.get("http://127.0.0.1:8000/api/user-logado", {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        const data = await res.json();
-        if (!data.auth) {
-          navigate("/"); // Redireciona para login se não autenticado
+
+        if (!res.data.auth) {
+          navigate("/");
         } else {
           carregarContas();
         }
@@ -31,12 +43,16 @@ export default function TelaInicio() {
         navigate("/");
       }
     };
+
     verificarLogin();
   }, []);
 
   const carregarContas = async () => {
     try {
-      const res = await axios.get("/contas-json");
+      const res = await axios.get("http://127.0.0.1:8000/api/contas-json", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       const contasFormatadas = res.data.contas.map((c) => ({
         ...c,
         vencFormatado: new Date(c.data_vencimento).toLocaleString("pt-BR"),
@@ -44,45 +60,60 @@ export default function TelaInicio() {
           ? new Date(c.data_pagamento).toLocaleString("pt-BR")
           : "-",
       }));
+
       setContas(contasFormatadas);
 
       const soma = contasFormatadas.reduce(
         (acc, c) => acc + parseFloat(c.preco),
         0
       );
+
       setTotal(soma);
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao carregar contas:", err);
     }
   };
 
-  // Logout
   const handleLogout = async () => {
     try {
       await axios.post(
-        "/logout",
+        "http://127.0.0.1:8000/api/logout",
         {},
-        {
-          headers: {
-            "X-CSRF-TOKEN": document
-              .querySelector('meta[name="csrf-token"]')
-              .getAttribute("content"),
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      navigate("/"); // Volta para login
+      localStorage.removeItem("token");
+      navigate("/");
     } catch (err) {
       console.error("Erro ao sair:", err);
     }
   };
 
-  // Paginação
+  // Filtros aplicados
+  const aplicarFiltros = () => {
+    return contas.filter((c) => {
+      const descricaoMatch = c.descricao
+        .toLowerCase()
+        .includes(filtroDescricao.toLowerCase());
+
+      const vencimento = new Date(c.data_vencimento);
+      const inicial = filtroVencimentoInicial ? new Date(filtroVencimentoInicial) : null;
+      const final = filtroVencimentoFinal ? new Date(filtroVencimentoFinal) : null;
+      const vencimentoMatch =
+        (!inicial || vencimento >= inicial) && (!final || vencimento <= final);
+
+      const statusMatch = !filtroStatus || c.status === filtroStatus;
+
+      return descricaoMatch && vencimentoMatch && statusMatch;
+    });
+  };
+
+  const contasFiltradas = aplicarFiltros();
+  const totalPaginas = Math.ceil(contasFiltradas.length / itensPorPagina);
   const indiceInicial = (paginaAtual - 1) * itensPorPagina;
-  const contasPaginadas = contas.slice(
+  const contasPaginadas = contasFiltradas.slice(
     indiceInicial,
     indiceInicial + itensPorPagina
   );
-  const totalPaginas = Math.ceil(contas.length / itensPorPagina);
 
   const changePage = (page) => {
     if (page < 1 || page > totalPaginas) return;
@@ -91,13 +122,21 @@ export default function TelaInicio() {
 
   const excluirConta = async () => {
     if (!contaExcluir) return;
-    await axios.delete(`/contas/${contaExcluir}`);
-    setContaExcluir(null);
-    carregarContas();
-    const modal = bootstrap.Modal.getInstance(
-      document.getElementById("confirmDeleteModal")
-    );
-    modal.hide();
+    try {
+      await axios.delete(
+        `http://127.0.0.1:8000/api/contas/${contaExcluir}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setContaExcluir(null);
+      carregarContas();
+      const modal = bootstrap.Modal.getInstance(
+        document.getElementById("confirmDeleteModal")
+      );
+      modal.hide();
+    } catch (err) {
+      console.error(err.response?.data || err);
+      alert(err.response?.data?.error || "Erro ao excluir conta.");
+    }
   };
 
   return (
@@ -127,10 +166,9 @@ export default function TelaInicio() {
                 <button
                   className="btn btn-danger btn-sm"
                   onClick={() => {
-                    const modal = new bootstrap.Modal(
+                    new bootstrap.Modal(
                       document.getElementById("logoutModal")
-                    );
-                    modal.show();
+                    ).show();
                   }}
                 >
                   Sair
@@ -156,32 +194,176 @@ export default function TelaInicio() {
           </strong>
         </h5>
 
-        {/* tabela e paginação */}
-        {/* ... você pode reutilizar a tabela e modais que já tinha */}
+        {/* FILTROS DE PESQUISA */}
+        <div className="card p-3 mb-4 shadow-sm">
+          <div className="row g-3">
+            <div className="col-md-3">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Descrição"
+                value={filtroDescricao}
+                onChange={(e) => setFiltroDescricao(e.target.value)}
+              />
+            </div>
+            <div className="col-md-2">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Vencimento Inicial"
+                onFocus={(e) => (e.target.type = "date")}
+                value={filtroVencimentoInicial}
+                onChange={(e) => setFiltroVencimentoInicial(e.target.value)}
+              />
+            </div>
+            <div className="col-md-2">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Vencimento Final"
+                onFocus={(e) => (e.target.type = "date")}
+                value={filtroVencimentoFinal}
+                onChange={(e) => setFiltroVencimentoFinal(e.target.value)}
+              />
+            </div>
+            <div className="col-md-2">
+              <select
+                className="form-control"
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+              >
+                <option value="">Status</option>
+                <option value="Aberta">Aberta</option>
+                <option value="Quitada">Quitada</option>
+              </select>
+            </div>
+            <div className="col-md-3 d-flex gap-2">
+              <button className="btn btn-dark w-50" onClick={() => setPaginaAtual(1)}>
+                Buscar
+              </button>
+              <button
+                className="btn btn-danger w-50"
+                onClick={() => {
+                  setFiltroDescricao("");
+                  setFiltroVencimentoInicial("");
+                  setFiltroVencimentoFinal("");
+                  setFiltroStatus("");
+                  setPaginaAtual(1);
+                }}
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* TABELA */}
+        <div className="table-responsive shadow-sm">
+          <table className="table table-striped table-hover">
+            <thead className="table-dark">
+              <tr>
+                <th>Id</th>
+                <th>Descrição</th>
+                <th>Preço</th>
+                <th>Data de Vencimento</th>
+                <th>Data de Pagamento</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contasPaginadas.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.id}</td>
+                  <td>{c.descricao}</td>
+                  <td>R$ {parseFloat(c.preco).toFixed(2)}</td>
+                  <td>{c.vencFormatado}</td>
+                  <td>{c.pagFormatado}</td>
+                  <td>
+                    {c.status === "Quitada" ? (
+                      <span className="badge bg-success">Quitada</span>
+                    ) : (
+                      <span className="badge bg-info text-dark">Aberta</span>
+                    )}
+                  </td>
+                  <td className="d-flex gap-2">
+                    <a href={`/conta/${c.id}`} className="btn btn-warning btn-sm">
+                      👁 Ver
+                    </a>
+                    <a href={`/conta/${c.id}/editar`} className="btn btn-primary btn-sm">
+                      ✏ Editar
+                    </a>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => {
+                        setContaExcluir(c.id);
+                        new bootstrap.Modal(
+                          document.getElementById("confirmDeleteModal")
+                        ).show();
+                      }}
+                    >
+                      🗑 Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* PAGINAÇÃO */}
+        <nav className="d-flex justify-content-center my-3">
+          <ul className="pagination">
+            <li className={`page-item ${paginaAtual === 1 ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => changePage(paginaAtual - 1)}>
+                Anterior
+              </button>
+            </li>
+            {Array.from({ length: totalPaginas }, (_, i) => (
+              <li key={i} className={`page-item ${paginaAtual === i + 1 ? "active" : ""}`}>
+                <button className="page-link" onClick={() => changePage(i + 1)}>
+                  {i + 1}
+                </button>
+              </li>
+            ))}
+            <li className={`page-item ${paginaAtual === totalPaginas ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => changePage(paginaAtual + 1)}>
+                Próxima
+              </button>
+            </li>
+          </ul>
+        </nav>
       </div>
 
-      {/* Modal Logout */}
+      {/* MODAL CONFIRMAR EXCLUSÃO */}
+      <div className="modal fade" id="confirmDeleteModal" tabIndex="-1">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content shadow-lg border-0">
+            <div className="modal-header bg-danger text-white">
+              <h5 className="modal-title">Excluir Conta</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div className="modal-body">Tem certeza que deseja excluir esta conta?</div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button className="btn btn-danger" onClick={excluirConta}>Excluir</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MODAL LOGOUT */}
       <div className="modal fade" id="logoutModal" tabIndex="-1">
         <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content shadow-lg border-0">
             <div className="modal-header bg-warning">
               <h5 className="modal-title">Encerrar Sessão</h5>
-              <button
-                type="button"
-                className="btn-close"
-                data-bs-dismiss="modal"
-              ></button>
+              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div className="modal-body">
-              Tem certeza que deseja sair da sua conta?
-            </div>
+            <div className="modal-body">Tem certeza que deseja sair da sua conta?</div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" data-bs-dismiss="modal">
-                Cancelar
-              </button>
-              <button className="btn btn-warning" onClick={handleLogout}>
-                Sair
-              </button>
+              <button className="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button className="btn btn-warning" onClick={handleLogout}>Sair</button>
             </div>
           </div>
         </div>

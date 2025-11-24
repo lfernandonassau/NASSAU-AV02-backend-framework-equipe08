@@ -2,44 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Conta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ContaController extends Controller
 {
-    /**
-     * Retorna as contas do usuário logado em JSON (para React).
-     */
+    // Retorna todas as contas do usuário logado (JSON)
     public function getContasJson()
     {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        if (!$user) {
-            abort(403, 'Usuário não logado.');
-        }
-
-        $contas = Conta::where('user_id', $user->id)
-                    ->orderBy('id', 'desc')
-                    ->get();
-
-        $totalAbertas = Conta::where('user_id', $user->id)
-                            ->where('status', 'Aberta')
-                            ->sum('preco');
-
-        return response()->json([
-            'contas' => $contas,
-            'totalAbertas' => $totalAbertas
-        ]);
-    }
-
-    /**
-     * Tela inicial com as contas do usuário.
-     */
-    public function index()
-    {
-        /** @var \App\Models\User $user */
         $user = Auth::user();
         if (!$user) {
             abort(403, 'Usuário não logado.');
@@ -50,73 +21,39 @@ class ContaController extends Controller
                         ->get();
 
         $totalAbertas = Conta::where('user_id', $user->id)
-                            ->where('status', 'Aberta')
-                            ->sum('preco');
+                              ->where('status', 'Aberta')
+                              ->sum('preco');
 
-        return view('TelaInicio', compact('contas', 'totalAbertas'));
-    }
-
-    /**
-     * Mostra o formulário de criação.
-     */
-    public function create()
-    {
-        return view('contas.create');
-    }
-
-    /**
-     * Salva uma nova conta do usuário logado.
-     */
-    public function store(Request $request)
-    {
-        $request->validate([
-            'descricao' => 'required|string|max:255',
-            'preco' => 'required|numeric',
-            'data_vencimento' => 'required|date',
+        return response()->json([
+            'contas' => $contas,
+            'totalAbertas' => $totalAbertas
         ]);
+    }
 
-        /** @var \App\Models\User $user */
+    // Retorna uma conta específica em JSON
+    public function showContaJson($id)
+    {
         $user = Auth::user();
         if (!$user) {
-            abort(403, 'Usuário não logado.');
+            return response()->json(['error' => 'Usuário não logado'], 401);
         }
 
-        $conta = new Conta($request->all());
-        $conta->user_id = $user->id;
-        $conta->save();
+        $conta = Conta::where('id', $id)
+                      ->where('user_id', $user->id)
+                      ->first();
 
-        return redirect()->route('TelaInicio')->with('success', 'Conta adicionada com sucesso!');
-    }
-
-    /**
-     * Exibe uma conta específica.
-     */
-    public function show(Conta $conta)
-    {
-        return view('contas.show', compact('conta'));
-    }
-
-    /**
-     * Mostra o formulário de edição.
-     */
-    public function edit(Conta $conta)
-    {
-        // Garante que o usuário só edita sua própria conta
-        if ($conta->user_id !== Auth::id()) {
-            abort(403, 'Ação não autorizada.');
+        if (!$conta) {
+            return response()->json(['error' => 'Conta não encontrada'], 404);
         }
 
-        return view('contas.edit', compact('conta'));
+        return response()->json($conta);
     }
 
-    /**
-     * Atualiza os dados da conta.
-     */
-    public function update(Request $request, Conta $conta)
+    // Atualização via JSON
+    public function updateJson(Request $request, Conta $conta)
     {
-        // Valida usuário
         if ($conta->user_id !== Auth::id()) {
-            abort(403, 'Ação não autorizada.');
+            return response()->json(['error' => 'Ação não autorizada'], 403);
         }
 
         $request->validate([
@@ -127,19 +64,45 @@ class ContaController extends Controller
 
         $conta->update($request->all());
 
-        return redirect()->route('TelaInicio')->with('success', 'Conta atualizada com sucesso!');
+        return response()->json([
+            'message' => 'Conta atualizada com sucesso!',
+            'conta' => $conta
+        ]);
+    }
+    //soft delete das contas 
+    public function destroy($id)
+{
+    $user = Auth::user();
+    if (!$user) {
+        return response()->json(['error' => 'Usuário não logado'], 401);
     }
 
-    /**
-     * Exclui a conta do usuário logado.
-     */
-    public function destroy(Conta $conta)
-    {
-        if ($conta->user_id !== Auth::id()) {
-            abort(403, 'Ação não autorizada.');
-        }
+    $conta = Conta::where('id', $id)
+                  ->where('user_id', $user->id)
+                  ->first();
 
-        $conta->delete();
-        return redirect()->route('TelaInicio')->with('success', 'Conta movida para a lixeira!');
+    if (!$conta) {
+        return response()->json(['error' => 'Conta não encontrada'], 404);
     }
+
+    try {
+        $conta->delete(); 
+        return response()->json(['message' => 'Conta excluída com sucesso!']);
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Erro ao excluir conta'], 500);
+    }
+}
+//função para restaurar as contas deletadas(mas não estou usando só deixei aqui caso queira usar mais para frente)
+public function restore($id)
+{
+    $conta = Conta::withTrashed()->where('id', $id)->where('user_id', Auth::id())->first();
+
+    if (!$conta) {
+        return response()->json(['error' => 'Conta não encontrada'], 404);
+    }
+
+    $conta->restore();
+    return response()->json(['message' => 'Conta restaurada com sucesso!']);
+}
+
 }

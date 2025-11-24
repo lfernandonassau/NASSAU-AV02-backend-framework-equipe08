@@ -1,90 +1,162 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use Illuminate\Http\Request;
 use Exception;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
-    // Carrega o formulário para cadastro de novo usuário
+    /**
+     * Carrega view de criação
+     */
     public function create()
     {
-        //caregar view
         return view('users.create');
     }
-       public function store(Request $request)
-{
-    try {
-        $request->validate([
+
+
+    /**
+     * Registrar usuário
+     */
+    public function store(Request $request)
+    {
+        try {
+            // Validação com verificação de domínio real
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => [
+                    'required',
+                    'email',
+                    'unique:users,email',
+                    function ($attribute, $value, $fail) {
+                        $domain = substr(strrchr($value, "@"), 1);
+
+                        // Verifica domínio real (registros MX)
+                        if (!checkdnsrr($domain, 'MX')) {
+                            $fail('O domínio do e-mail não existe ou não pode receber e-mails.');
+                        }
+                    }
+                ],
+                'password' => 'required|string|min:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Criar usuário
+            User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => bcrypt($request->password),
+            ]);
+
+            return response()->json([
+                'message' => 'Usuário cadastrado com sucesso!'
+            ], 201);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao cadastrar usuário.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    /**
+     * Atualizar usuário
+     */
+    public function update(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        if (Auth::id() != $user->id) {
+            return response()->json([
+                'error' => 'Ação não permitida.'
+            ], 403);
+        }
+
+        // Validação com domínio real
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
+            'email' => [
+                'required',
+                'email',
+                'unique:users,email,' . $user->id,
+                function ($attribute, $value, $fail) {
+                    $domain = substr(strrchr($value, "@"), 1);
+
+                    if (!checkdnsrr($domain, 'MX')) {
+                        $fail('O domínio do e-mail não existe ou não pode receber e-mails.');
+                    }
+                }
+            ],
+            'password' => 'nullable|string|min:6|confirmed',
         ]);
 
-        User::create([
+        if ($validator->fails()) {
+            return response()->json([
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = [
             'name' => $request->name,
             'email' => $request->email,
-            'password' => bcrypt($request->password),
+        ];
+
+        if ($request->filled('password')) {
+            $data['password'] = bcrypt($request->password);
+        }
+
+        $user->update($data);
+
+        return response()->json([
+            'message' => 'Usuário atualizado com sucesso!'
         ]);
-
-        return response()->json(['message' => 'Usuário cadastrado com sucesso!']);
-        
-    } catch (Exception $e) {
-        return response()->json(['error' => 'Erro ao cadastrar usuário'], 500);
-    }
-}
-
-public function destroy($id){
-// Garante que o usuário só pode deletar somente a própria conta
-    if (Auth::id() != $id) {
-    return redirect()->back()->with('error', 'Ação não permitida.');
-    }
-    $user = User::findOrFail($id);
-    $user->delete(); //Soft delete (não apaga do banco)
-
-    return redirect()->route('welcome')->with('success', 'Usuário deletado com sucesso!');
-}
-
-public function update(Request $request, $id)
-{
-    $user = User::findOrFail($id);
-
-    // Validação
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|email|unique:users,email,' . $user->id, // garante e-mail único
-        'password' => 'nullable|string|min:6|confirmed', // senha opcional
-    ]);
-
-    //os dados que serão atualizados
-    $data = [
-        'name' => $request->name,
-        'email' => $request->email,
-    ];
-
-    // Atualiza a senha somente se o campo foi preenchido
-    if ($request->filled('password')) {
-        $data['password'] = bcrypt($request->password);
     }
 
-    $user->update($data);
 
-    return redirect()->route('usuario')->with('success', 'Usuário atualizado com sucesso!');
-}
+    /**
+     * Buscar usuário para edição
+     */
+    public function edit($id)
+    {
+        $user = User::findOrFail($id);
 
-public function edit($id)
-{
-    // Busca o usuário pelo ID
-    $user = User::findOrFail($id);
+        if (Auth::id() != $user->id) {
+            return response()->json([
+                'error' => 'Ação não permitida.'
+            ], 403);
+        }
 
-    // Garante que o usuário só pode editar a própria conta
-    if (Auth::id() != $user->id) {
-        return redirect()->back()->with('error', 'Ação não permitida.');
+        return response()->json($user);
     }
 
-    return view('users.EditarUsuario', compact('user'));
-}
 
+    /**
+     * Soft Delete
+     */
+    public function destroy($id)
+    {
+        if (Auth::id() != $id) {
+            return response()->json([
+                'error' => 'Ação não permitida.'
+            ], 403);
+        }
+
+        $user = User::findOrFail($id);
+        $user->delete();
+
+        return response()->json([
+            'message' => 'Usuário deletado com sucesso!'
+        ]);
+    }
 }

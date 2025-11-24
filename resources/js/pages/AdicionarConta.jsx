@@ -22,21 +22,20 @@ export default function AdicionarConta() {
     e.preventDefault();
     setErrors([]);
 
+    const token = localStorage.getItem("token"); // 🔑 pega o JWT
+
     try {
-      const res = await fetch("/contas", {
+      const res = await fetch("/api/contas", {
         method: "POST",
-        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-TOKEN": document
-            .querySelector('meta[name="csrf-token"]')
-            .getAttribute("content"),
+          Authorization: `Bearer ${token}`, // 🔥 envia JWT
         },
         body: JSON.stringify(conta),
       });
 
       if (res.ok) {
-        navigate("/inicio"); // volta para a tela inicial
+        navigate("/inicio");
       } else if (res.status === 422) {
         const data = await res.json();
         setErrors(data.errors || ["Erro de validação"]);
@@ -56,6 +55,7 @@ export default function AdicionarConta() {
           <h4>Adicionar Conta</h4>
         </div>
         <div className="card-body">
+
           {errors.length > 0 && (
             <div className="alert alert-danger">
               <strong>Erro!</strong>
@@ -69,12 +69,9 @@ export default function AdicionarConta() {
 
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
-              <label htmlFor="descricao" className="form-label">
-                Descrição
-              </label>
+              <label className="form-label">Descrição</label>
               <input
                 type="text"
-                id="descricao"
                 name="descricao"
                 className="form-control"
                 value={conta.descricao}
@@ -84,13 +81,10 @@ export default function AdicionarConta() {
             </div>
 
             <div className="mb-3">
-              <label htmlFor="preco" className="form-label">
-                Preço (R$)
-              </label>
+              <label className="form-label">Preço (R$)</label>
               <input
                 type="number"
                 step="0.01"
-                id="preco"
                 name="preco"
                 className="form-control"
                 value={conta.preco}
@@ -100,12 +94,9 @@ export default function AdicionarConta() {
             </div>
 
             <div className="mb-3">
-              <label htmlFor="data_vencimento" className="form-label">
-                Data de Vencimento
-              </label>
+              <label className="form-label">Data de Vencimento</label>
               <input
                 type="datetime-local"
-                id="data_vencimento"
                 name="data_vencimento"
                 className="form-control"
                 value={conta.data_vencimento}
@@ -115,12 +106,9 @@ export default function AdicionarConta() {
             </div>
 
             <div className="mb-3">
-              <label htmlFor="data_pagamento" className="form-label">
-                Data de Pagamento
-              </label>
+              <label className="form-label">Data de Pagamento</label>
               <input
                 type="datetime-local"
-                id="data_pagamento"
                 name="data_pagamento"
                 className="form-control"
                 value={conta.data_pagamento}
@@ -129,12 +117,9 @@ export default function AdicionarConta() {
             </div>
 
             <div className="mb-3">
-              <label htmlFor="status" className="form-label">
-                Status
-              </label>
+              <label className="form-label">Status</label>
               <select
                 name="status"
-                id="status"
                 className="form-select"
                 value={conta.status}
                 onChange={handleChange}
@@ -153,14 +138,15 @@ export default function AdicionarConta() {
               >
                 Voltar
               </button>
+
               <button type="submit" className="btn btn-success">
                 Salvar
               </button>
             </div>
           </form>
+
         </div>
       </div>
     </div>
   );
 }
-

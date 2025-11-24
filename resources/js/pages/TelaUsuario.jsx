@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api/api";
 import { useNavigate } from "react-router-dom";
 
 export default function TelaUsuario() {
@@ -10,33 +10,37 @@ export default function TelaUsuario() {
 
     const [deleteUserId, setDeleteUserId] = useState(null);
 
-    // Carregar usuário autenticado
+    // Carregar usuário autenticado via JWT
     useEffect(() => {
-        axios
-            .get("/user")
+        api.get("/me")
             .then((res) => setUser(res.data))
-            .catch(() => navigate("/"))
+            .catch(() => {
+                localStorage.removeItem("token");
+                navigate("/");
+            })
             .finally(() => setLoading(false));
     }, []);
 
-    // Logout
-    const handleLogout = async () => {
-        try {
-            await axios.post("/logout");
-        } finally {
-            navigate("/");
-        }
+    // Logout JWT — só remove token
+    const handleLogout = () => {
+        localStorage.removeItem("token");
+        navigate("/");
     };
 
-    // Deletar conta
-    const handleDelete = async () => {
-        try {
-            await axios.delete(`/user/${deleteUserId}`);
-            navigate("/");
-        } catch (error) {
-            console.error("Erro ao deletar usuário");
-        }
-    };
+        const handleDelete = async () => {
+            try {
+                const response = await api.delete(`/user/${deleteUserId}`);
+
+                alert("Usuário deletado com sucesso!");
+
+                localStorage.removeItem("token");
+                navigate("/");
+
+            } catch (error) {
+                console.error(error);
+                alert("Erro ao deletar usuário");
+            }
+        };
 
     if (loading) return <h2>Carregando...</h2>;
     if (!user) return <h2>Usuário não encontrado</h2>;
@@ -47,7 +51,14 @@ export default function TelaUsuario() {
             {/* Navbar */}
             <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
                 <div className="container-fluid">
-                    <span className="navbar-brand text-light">Marca I</span>
+                        <span
+                            className="navbar-brand text-light"
+                            style={{ cursor: "pointer" }}
+                            onClick={() => navigate("/inicio")}   // <--- redireciona!
+                        >
+                            Marca I
+                        </span>
+
 
                     <button className="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#logoutModal">
                         Sair
@@ -82,7 +93,7 @@ export default function TelaUsuario() {
 
                         <button
                             className="btn btn-primary"
-                            onClick={() => navigate(`/user/${user.id}/edit`)}
+                            onClick={() => navigate(`/usuario/editar`)}
                         >
                             Editar Usuário
                         </button>
